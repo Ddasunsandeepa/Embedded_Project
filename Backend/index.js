@@ -1,4 +1,5 @@
 const express = require("express");
+require("dotenv").config();
 const bodyParser = require("body-parser");
 const cors = require("cors");
 const connectDB = require("./config/db");
@@ -9,8 +10,8 @@ const SensorData = require("./models/sensorModels"); // your model
 
 const twilio = require("twilio");
 
-const accountSid = "ACaa58a6815b0622f720cf63840b8d7329";
-const authToken = "a595a94eae1fefb091fe0d7b733067cc";
+const accountSid = process.env.TWILIO_ACCOUNT_SID;
+const authToken = process.env.TWILIO_AUTH_TOKEN;
 const clientTwilio = twilio(accountSid, authToken);
 
 const sendAlert = (message, toNumber) => {
