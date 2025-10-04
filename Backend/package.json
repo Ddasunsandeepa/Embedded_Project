@@ -12,12 +12,14 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@vonage/server-sdk": "^3.25.1",
     "body-parser": "^2.2.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "mongoose": "^8.19.0",
     "mqtt": "^5.14.1",
+    "socket.io": "^4.8.1",
     "twilio": "^5.10.2"
   },
   "devDependencies": {

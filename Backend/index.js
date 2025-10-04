@@ -2,42 +2,62 @@ const express = require("express");
 require("dotenv").config();
 const bodyParser = require("body-parser");
 const cors = require("cors");
+const http = require("http"); // <-- for socket.io
+const { Server } = require("socket.io");
 const connectDB = require("./config/db");
-const sensorRoutes = require("./routes/sensorRoutes"); // your existing routes
-const mongoose = require("mongoose");
+const sensorRoutes = require("./routes/sensorRoutes");
 const mqtt = require("mqtt");
-const SensorData = require("./models/sensorModels"); // your model
-
-const twilio = require("twilio");
-
-const accountSid = process.env.TWILIO_ACCOUNT_SID;
-const authToken = process.env.TWILIO_AUTH_TOKEN;
-const clientTwilio = twilio(accountSid, authToken);
-
-const sendAlert = (message, toNumber) => {
-  clientTwilio.messages
-    .create({
-      body: message,
-      from: "+12794003120", // Your Twilio number
-      to: "+94778766684",
-    })
-    .then((msg) => console.log("✅ Alert sent:", msg.sid))
-    .catch((err) => console.error("❌ Twilio error:", err));
-};
+const SensorData = require("./models/sensorModels");
+const axios = require("axios");
 
 const app = express();
+const server = http.createServer(app);
 
-// Middleware
+// Socket.io setup
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"],
+  },
+});
+
+// Send SMS function
+const sendAlert = async (message, toNumber) => {
+  try {
+    const resp = await axios.post(
+      "https://519pvz.api.infobip.com/sms/2/text/advanced",
+      {
+        messages: [
+          {
+            destinations: [{ to: toNumber }],
+            from: "ServiceSMS",
+            text: message,
+          },
+        ],
+      },
+      {
+        headers: {
+          Authorization: `App ${process.env.INFOBIP_API_KEY}`,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+      }
+    );
+    console.log("✅ SMS sent:", resp.data);
+  } catch (err) {
+    console.error("❌ Infobip error:", err.response?.data || err.message);
+  }
+};
+
 app.use(cors());
 app.use(bodyParser.json());
 
-// Connect to MongoDB
+// Connect DB
 connectDB();
 
 // MQTT setup
-const mqttServer = "mqtt://broker.hivemq.com"; // same broker
+const mqttServer = "mqtt://broker.hivemq.com";
 const mqttTopic = "smartagri/sensor";
-
 const client = mqtt.connect(mqttServer);
 
 client.on("connect", () => {
@@ -54,23 +74,27 @@ client.on("message", async (topic, message) => {
     await sensor.save();
     console.log("✅ Data saved to MongoDB:", data);
 
-    // --- Add thresholds for alerts ---
-    if (data.soilMoisture < 30) {
-      sendAlert(`⚠️ Soil moisture low: ${data.soilMoisture}%`, "+94778766684");
+    // --- Check thresholds ---
+    if (data.soilMoisture < 50) {
+      const msg = `⚠️ Soil moisture low: ${data.soilMoisture}%`;
+      sendAlert(msg, "94778766684"); // SMS
+      io.emit("alert", msg); // Web notification
     }
     if (data.temperature > 40) {
-      sendAlert(`⚠️ High temperature: ${data.temperature}°C`, "+94778766684");
+      const msg = `⚠️ High temperature: ${data.temperature}°C`;
+      sendAlert(msg, "94778766684"); // SMS
+      io.emit("alert", msg); // Web notification
     }
   } catch (err) {
     console.error("❌ Error saving data:", err);
   }
 });
 
-// REST API routes
-app.use("/api/sensor", sensorRoutes); // <-- your existing controller/routes
+// API routes
+app.use("/api/sensor", sensorRoutes);
 
 // Start server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
 });

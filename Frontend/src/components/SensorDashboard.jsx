@@ -27,8 +27,13 @@ export default function SensorDashboard() {
 
   useEffect(() => {
     const fetchData = async () => {
-      const result = await getSensorData();
-      setData(result);
+      try {
+        const result = await getSensorData();
+        setData(result || []);
+      } catch (err) {
+        console.error("Error fetching sensor data:", err);
+        setData([]);
+      }
     };
 
     fetchData();
